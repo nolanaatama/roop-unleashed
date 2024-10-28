@@ -19,7 +19,7 @@ THREAD_LOCK_DMDNET = threading.Lock()
 
 
 class Enhance_DMDNet():
-
+    plugin_options:dict = None
     model_dmdnet = None
     torchdevice = None
 
@@ -27,9 +27,14 @@ class Enhance_DMDNet():
     type = 'enhance'
 
 
-    def Initialize(self, devicename):
+    def Initialize(self, plugin_options:dict):
+        if self.plugin_options is not None:
+            if self.plugin_options["devicename"] != plugin_options["devicename"]:
+                self.Release()
+
+        self.plugin_options = plugin_options
         if self.model_dmdnet is None:
-            self.model_dmdnet = self.create(devicename)
+            self.model_dmdnet = self.create(self.plugin_options["devicename"])
             
 
     # temp_frame already cropped+aligned, bbox not
@@ -473,7 +478,8 @@ class Query(nn.Module):
         return self.Query(x)
 
 def roi_align_self(input, location, target_size):
-    return torch.cat([F.interpolate(input[i:i+1,:,location[i,1]:location[i,3],location[i,0]:location[i,2]],(target_size,target_size),mode='bilinear',align_corners=False) for i in range(input.size(0))],0)
+    test = (target_size.item(),target_size.item())
+    return torch.cat([F.interpolate(input[i:i+1,:,location[i,1]:location[i,3],location[i,0]:location[i,2]],test,mode='bilinear',align_corners=False) for i in range(input.size(0))],0)
 
 class FeatureExtractor(nn.Module):
     def __init__(self, ngf = 64, key_scale = 4):#
@@ -827,9 +833,15 @@ class DMDNet(nn.Module):
         le_location = locs[:,0,:]
         re_location = locs[:,1,:]
         mo_location = locs[:,3,:]
-        le_location = le_location.cpu().int().numpy()
-        re_location = re_location.cpu().int().numpy()
-        mo_location = mo_location.cpu().int().numpy()
+
+        # Somehow with latest Torch it doesn't like numpy wrappers anymore
+        
+        # le_location = le_location.cpu().int().numpy()
+        # re_location = re_location.cpu().int().numpy()
+        # mo_location = mo_location.cpu().int().numpy()
+        le_location = le_location.cpu().int()
+        re_location = re_location.cpu().int()
+        mo_location = mo_location.cpu().int()
 
         up_in_256 = fs_in['f256'].clone()# * 0
         up_in_128 = fs_in['f128'].clone()# * 0
@@ -859,7 +871,11 @@ class DMDNet(nn.Module):
         return self.memorize(sp_imgs, sp_locs)
 
     def forward(self, lq=None, loc=None, sp_256 = None, sp_128 = None, sp_64 = None):
-        fs_in = self.E_lq(lq, loc) # low quality images
+        try:
+            fs_in = self.E_lq(lq, loc) # low quality images
+        except Exception as e:
+            print(e)
+
         GeMemNorm256, GeMemNorm128, GeMemNorm64, Ind256, Ind128, Ind64 = self.enhancer(fs_in)
         GeOut = self.reconstruct(fs_in, loc, memstar = [GeMemNorm256, GeMemNorm128, GeMemNorm64])
         if sp_256 is not None and sp_128 is not None and sp_64 is not None:

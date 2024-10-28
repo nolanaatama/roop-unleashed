@@ -3,6 +3,7 @@ import os
 import gradio as gr
 import roop.globals
 import ui.globals
+from roop.utilities import clean_dir
 
 available_themes = ["Default", "gradio/glass", "gradio/monochrome", "gradio/seafoam", "gradio/soft", "gstaff/xkcd", "freddyaboulton/dracula_revamped", "ysharma/steampunk"]
 image_formats = ['jpg','png', 'webp']
@@ -43,10 +44,10 @@ def settings_tab():
                 settings_controls.append(gr.Dropdown(video_formats, label="Video Output Format", info='default: mp4', value=roop.globals.CFG.output_video_format, elem_id='output_video_format', interactive=True))
                 video_quality = gr.Slider(0, 100, value=roop.globals.CFG.video_quality, label="Video Quality (crf)", info='default: 14', step=1.0, interactive=True)
             with gr.Column():
-                button_apply_restart = gr.Button("Restart Server", variant='primary')
-                with gr.Box():
-                    settings_controls.append(gr.Checkbox(label='Start with active live cam', value=roop.globals.CFG.live_cam_start_active, elem_id='live_cam_start_active', interactive=True))
+                with gr.Group():
                     settings_controls.append(gr.Checkbox(label='Use OS temp folder', value=roop.globals.CFG.use_os_temp_folder, elem_id='use_os_temp_folder', interactive=True))
+                    settings_controls.append(gr.Checkbox(label='Show video in browser (re-encodes output)', value=roop.globals.CFG.output_show_video, elem_id='output_show_video', interactive=True))
+                button_apply_restart = gr.Button("Restart Server", variant='primary')
                 button_clean_temp = gr.Button("Clean temp folder")
                 button_apply_settings = gr.Button("Apply Settings")
 
@@ -102,14 +103,13 @@ def on_settings_changed(evt: gr.SelectData):
 def clean_temp():
     from ui.main import prepare_environment
     
-    if not roop.globals.CFG.use_os_temp_folder:
-        shutil.rmtree(os.environ["TEMP"])
-    prepare_environment()
-   
     ui.globals.ui_input_thumbs.clear()
     roop.globals.INPUT_FACESETS.clear()
     roop.globals.TARGET_FACES.clear()
     ui.globals.ui_target_thumbs = []
+    if not roop.globals.CFG.use_os_temp_folder:
+        clean_dir(os.environ["TEMP"])
+    prepare_environment()
     gr.Info('Temp Files removed')
     return None,None,None,None
 
